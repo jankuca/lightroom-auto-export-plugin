@@ -7,12 +7,12 @@ local LrView = import 'LrView'
 local LrExportSession = import 'LrExportSession'
 local LrTasks = import 'LrTasks'
 -- Process pictures and save them as JPEG
-local function processPhotos(photos, exportSettings)
+local function processPhotos(folderPath, photos, exportSettings)
     LrFunctionContext.callWithContext("export", function(exportContext)
 
         local progressScope = LrProgressScope({
-            title = "Auto-exporting",
-            caption = "Starting export...",
+            title = "Auto-exporting: " .. folderPath,
+            caption = "Starting…",
             functionContext = exportContext
         })
 
@@ -57,76 +57,63 @@ end
 local function processLightroomFolders(LrCatalog, processAll, exportSettings)
     LrTasks.startAsyncTask(function()
         LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
-            local progressScope = LrProgressScope({
-                title = "Listing Folders and Files",
-                caption = "Starting...",
-                functionContext = context
-            })
+            local function processFolder(folder, processedPhotos)
+                LrFunctionContext.callWithContext("processFolder", function(folderContext)
+                    local progressScope = LrProgressScope({
+                        title = "Listing files for auto-export",
+                        caption = "Starting…",
+                        functionContext = folderContext
+                    })
 
-            local folders = {}
-            for _, folder in pairs(LrCatalog:getFolders()) do
-                progressScope:setCaption("Listing folder: " .. folder:getName())
-                table.insert(folders, folder)
-                if progressScope:isCanceled() then
-                    break
-                end
-            end
-            for _, folder in pairs(folders) do
-                local export = {}
-                local photos = folder:getPhotos()
-                local totalPhotos = #photos
+                    local export = {}
+                    local photos = folder:getPhotos()
+                    local totalPhotos = #photos
 
-                for photoIndex, photo in pairs(photos) do
-                    local keywords = photo:getRawMetadata("keywords")
-                    local skipPhoto = false
-                    for _, keyword in pairs(keywords) do
-                        if keyword:getName() == "Auto-exported" then
-                            skipPhoto = true
-                            break
+                    for photoIndex, photo in pairs(photos) do
+                        if not processedPhotos[photo.localIdentifier] then
+                            if (processAll or photo:getRawMetadata("pickStatus") == 1) and
+                                photo:getRawMetadata("pickStatus") ~= -1 then
+                                table.insert(export, photo)
+                                processedPhotos[photo.localIdentifier] = true
+                            end
+
+                            local progressCaption = string.format("Listing %s: %d/%d", folder:getPath(), photoIndex,
+                                totalPhotos)
+                            progressScope:setCaption(progressCaption)
+                            progressScope:setPortionComplete(photoIndex, totalPhotos)
+
+                            if progressScope:isCanceled() then
+                                break
+                            end
                         end
                     end
 
-                    if not skipPhoto and (processAll or photo:getRawMetadata("pickStatus") == 1) then
-                        LrCatalog:withWriteAccessDo("Add Keyword", (function(context)
-                            local keywords = LrCatalog:getKeywords()
-                            local autoExportedKeyword = nil
-                            for _, keyword in pairs(keywords) do
-                                if keyword:getName() == "Auto-exported" then
-                                    autoExportedKeyword = keyword
-                                    break
-                                end
-                            end
-                            if not autoExportedKeyword then
-                                autoExportedKeyword = LrCatalog:createKeyword("Auto-exported", {}, false, nil, true)
-                            end
-                            -- photo:addKeyword(autoExportedKeyword)
-                            table.insert(export, photo)
-                        end), {
-                            timeout = 30
-                        })
-                    end
+                    LrTasks.sleep(1)
 
-                    local progressCaption = string.format("Folder %s: %d/%d", folder:getPath(), photoIndex, totalPhotos)
-                    progressScope:setCaption(progressCaption)
-                    progressScope:setPortionComplete(photoIndex, totalPhotos)
+                    if #export > 0 then
+                        processPhotos(export, exportSettings)
+                    end
 
                     if progressScope:isCanceled() then
-                        break
+                        return
                     end
-                end
 
-                LrTasks.sleep(1)
-
-                if #export > 0 then
-                    processPhotos(export, exportSettings)
-                end
-
-                if progressScope:isCanceled() then
-                    break
-                end
+                    progressScope:done()
+                end)
             end
 
-            progressScope:done()
+            local function processFoldersRecursively(folder, processedPhotos)
+                for _, subFolder in pairs(folder:getChildren()) do
+                    processFoldersRecursively(subFolder, processedPhotos)
+                end
+                processFolder(folder, processedPhotos)
+            end
+
+            local folders = LrCatalog:getFolders()
+            local processedPhotos = {}
+            for _, folder in pairs(folders) do
+                processFoldersRecursively(folder, processedPhotos)
+            end
         end)
     end)
 end
