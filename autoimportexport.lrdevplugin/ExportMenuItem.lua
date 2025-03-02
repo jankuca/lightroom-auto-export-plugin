@@ -130,9 +130,6 @@ end
 
 -- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
 local function importFolder(LrCatalog, folder, processAll, exportSettings)
-    local presetFolders = LrApplication.developPresetFolders()
-    local presetFolder = presetFolders[1]
-    local presets = presetFolder:getDevelopPresets()
     LrTasks.startAsyncTask(function()
         local photos = folder:getPhotos()
         local export = {}
@@ -140,11 +137,6 @@ local function importFolder(LrCatalog, folder, processAll, exportSettings)
         for _, photo in pairs(photos) do
             if (photo:getRawMetadata("rating") ~= 3 and (processAll or photo:getRawMetadata("pickStatus") == 1)) then
                 LrCatalog:withWriteAccessDo("Apply Preset", (function(context)
-                    for _, preset in pairs(presets) do
-                        photo:applyDevelopPreset(preset)
-                        -- Tiny sleep in order to succesfully apply the preset
-                        LrTasks.sleep(0.1)
-                    end
                     photo:setRawMetadata("rating", 3)
                     table.insert(export, photo)
                 end), {
