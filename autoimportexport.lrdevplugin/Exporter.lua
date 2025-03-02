@@ -1,3 +1,4 @@
+local LrProgressScope = import 'LrProgressScope'
 local LrDialogs = import 'LrDialogs'
 local LrFunctionContext = import 'LrFunctionContext'
 local LrBinding = import 'LrBinding'
@@ -9,10 +10,12 @@ local LrTasks = import 'LrTasks'
 -- Process pictures and save them as JPEG
 local function processPhotos(photos, exportSettings)
     LrFunctionContext.callWithContext("export", function(exportContext)
-        local props = LrBinding.makePropertyTable(exportContext)
-        props.caption = "Starting…"
-        props.photosProcessed = 0
-        props.stopRequested = false
+
+        local progressScope = LrProgressScope({
+            title = "Auto-exporting",
+            caption = "Starting export...",
+            functionContext = exportContext
+        })
 
         local exportSession = LrExportSession({
             photosToExport = photos,
@@ -21,76 +24,6 @@ local function processPhotos(photos, exportSettings)
 
         local numPhotos = exportSession:countRenditions()
 
-        local f = LrView.osFactory()
-        local contents = f:column{
-            spacing = f:dialog_spacing(),
-            fill_horizontal = 1,
-            bind_to_object = props,
-            f:row{
-                fill_horizontal = 1,
-                f:static_text{
-                    title = LrView.bind("caption"),
-                    fill_horizontal = 1
-                }
-            },
-            f:view{
-                visible = LrView.bind {
-                    bind_to_object = props,
-                    key = "photosProcessed",
-                    transform = function(photosProcessed)
-                        return photosProcessed ~= numPhotos
-                    end
-                },
-                f:row{
-                    fill_horizontal = 1,
-                    f:static_text{
-                        title = LrView.bind {
-                            key = "photosProcessed",
-                            transform = function(photosProcessed)
-                                return string.format("%d/%d", photosProcessed + 1, numPhotos)
-                            end
-                        },
-                        fill_horizontal = 1
-                    }
-                }
-            },
-            f:view{
-                visible = LrView.bind {
-                    bind_to_object = props,
-                    key = "photosProcessed",
-                    transform = function(photosProcessed)
-                        return photosProcessed ~= numPhotos
-                    end
-                },
-                f:row{
-                    fill_horizontal = 1,
-                    f:push_button{
-                        title = "Stop",
-                        action = function()
-                            props.stopRequested = true
-                        end
-                    }
-                }
-            }
-        }
-
-        local paddedContents = f:column{
-            spacing = f:dialog_spacing(),
-            f:row{
-                margin_horizontal = 10,
-                margin_vertical = 10,
-                contents
-            }
-        }
-
-        local progressScope = LrDialogs.presentFloatingDialog(_PLUGIN, {
-            title = "Auto-exporting",
-            contents = paddedContents,
-            cannotCancel = false,
-            functionContext = exportContext,
-            blockTask = false
-        })
-
         local renditionParams = {
             progressScope = progressScope,
             renderProgressPortion = 1,
@@ -98,24 +31,26 @@ local function processPhotos(photos, exportSettings)
         }
 
         for i, rendition in exportSession:renditions(renditionParams) do
-            if props.stopRequested then
+            if progressScope:isCanceled() then
                 break
             end
 
             local progressCaption = rendition.photo:getFormattedMetadata("fileName") .. " (" .. i .. "/" .. numPhotos ..
                                         ")"
-            props.caption = "Exporting photo " .. progressCaption
-            props.photosProcessed = i
+            progressScope:setCaption("Exporting photo " .. progressCaption)
+            progressScope:setPortionComplete(i - 1, numPhotos)
 
             rendition:waitForRender()
         end
 
-        props.photosProcessed = numPhotos
-        if props.stopRequested then
-            props.caption = "Exporting stopped"
+        if progressScope:isCanceled() then
+            progressScope:setCaption("Exporting stopped")
         else
-            props.caption = "Exporting complete"
+            progressScope:setCaption("Exporting complete")
         end
+
+        -- Close the dialog
+        progressScope:done()
     end)
 end
 
