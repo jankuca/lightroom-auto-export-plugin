@@ -241,14 +241,6 @@ local function customPicker()
                 f:row{f:static_text{
                     alignment = "right",
                     width = LrView.share "label_width",
-                    title = "Preset selected:"
-                }, f:static_text{
-                    width_in_chars = numCharacters,
-                    title = LrView.bind("presetSelected")
-                }},
-                f:row{f:static_text{
-                    alignment = "right",
-                    width = LrView.share "label_width",
                     title = "Export folder: "
                 }, f:push_button{
                     title = "Select export Folder",
@@ -350,7 +342,38 @@ local function customPicker()
                         watcherRunning = false
                         props.watcherStatus = "Stopped after running"
                     end
-                }}
+                }},
+
+                f:row{
+                    fill_horizontal = 1,
+                    f:separator{
+                        fill_horizontal = 1
+                    }
+                },
+
+                f:row{
+                    fill_horizontal = 1,
+                    f:static_text{
+                        alignment = "right",
+                        width = LrView.share "label_width",
+                        title = "Current Export Settings:"
+                    },
+                    f:edit_field{
+                        width_in_chars = numCharacters,
+                        height_in_lines = 60,
+                        value = LrView.bind({
+                            keys = {"exportSettings"},
+                            transform = function()
+                                local settings = ""
+                                for key, value in pairs(props.exportSettings) do
+                                    settings = settings .. key .. ": " .. tostring(value) .. "\n"
+                                end
+                                return settings
+                            end
+                        }),
+                        enabled = false
+                    }
+                }
             }
 
             LrDialogs.presentModalDialog {
