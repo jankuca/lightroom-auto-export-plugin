@@ -3,6 +3,7 @@ local LrDialogs = import 'LrDialogs'
 local LrFunctionContext = import 'LrFunctionContext'
 local LrBinding = import 'LrBinding'
 local LrView = import 'LrView'
+local LrPathUtils = import 'LrPathUtils'
 local LrPrefs = import 'LrPrefs'
 
 local LrExportSession = import 'LrExportSession'
@@ -11,14 +12,9 @@ local LrTasks = import 'LrTasks'
 local prefs = LrPrefs.prefsForPlugin()
 
 -- Process pictures and save them as JPEG
-local function processPhotos(folderPath, photos, exportSettings)
+local function processPhotos(folderPath, photos, exportSettings, progressScope)
     LrFunctionContext.callWithContext("export", function(exportContext)
-
-        local progressScope = LrProgressScope({
-            title = "Auto-exporting: " .. folderPath,
-            caption = "Starting…",
-            functionContext = exportContext
-        })
+        progressScope:setCaption("Exporting… 0/" .. #photos)
 
         local exportSession = LrExportSession({
             photosToExport = photos,
@@ -38,22 +34,20 @@ local function processPhotos(folderPath, photos, exportSettings)
                 break
             end
 
-            local progressCaption = rendition.photo:getFormattedMetadata("fileName") .. " (" .. i .. "/" .. numPhotos ..
-                                        ")"
-            progressScope:setCaption("Exporting photo " .. progressCaption)
+            local fileName = rendition.photo:getFormattedMetadata("fileName")
+            local progressCaption = i .. "/" .. numPhotos .. " (" .. fileName .. ")"
+            progressScope:setCaption("Exporting… " .. progressCaption)
             progressScope:setPortionComplete(i - 1, numPhotos)
 
             rendition:waitForRender()
         end
 
         if progressScope:isCanceled() then
-            progressScope:setCaption("Exporting stopped")
+            progressScope:setCaption("Stopped")
         else
-            progressScope:setCaption("Exporting complete")
+            progressScope:setCaption("Done")
         end
 
-        -- Close the dialog
-        progressScope:done()
     end)
 end
 
@@ -63,9 +57,18 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
         LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
             local function processFolder(folder, processedPhotos)
                 LrFunctionContext.callWithContext("processFolder", function(folderContext)
+
+                    local folderPathParts = {}
+                    for part in string.gmatch(folder:getPath(), "[^/\\]+") do
+                        table.insert(folderPathParts, part)
+                    end
+
+                    local folderNameWithParent = folderPathParts[#folderPathParts - 1] .. "/" ..
+                                                     folderPathParts[#folderPathParts]
+
                     local progressScope = LrProgressScope({
-                        title = "Listing files for auto-export",
-                        caption = "Starting…",
+                        title = "Auto-exporting: " .. folderNameWithParent,
+                        caption = "Listing files…",
                         functionContext = folderContext
                     })
 
@@ -81,8 +84,7 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                                 processedPhotos[photo.localIdentifier] = true
                             end
 
-                            local progressCaption = string.format("Listing %s: %d/%d", folder:getPath(), photoIndex,
-                                totalPhotos)
+                            local progressCaption = string.format("Listing files… %d/%d", photoIndex, totalPhotos)
                             progressScope:setCaption(progressCaption)
                             progressScope:setPortionComplete(photoIndex, totalPhotos)
 
@@ -95,7 +97,7 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                     LrTasks.sleep(1)
 
                     if #export > 0 then
-                        processPhotos(folder:getPath(), export, exportSettings)
+                        processPhotos(folder:getPath(), export, exportSettings, progressScope)
                         LrTasks.sleep(1)
                         -- Mark folder as processed
                         prefs.processedFolders[folder:getPath()] = true
