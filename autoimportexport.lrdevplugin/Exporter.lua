@@ -3,9 +3,13 @@ local LrDialogs = import 'LrDialogs'
 local LrFunctionContext = import 'LrFunctionContext'
 local LrBinding = import 'LrBinding'
 local LrView = import 'LrView'
+local LrPrefs = import 'LrPrefs'
 
 local LrExportSession = import 'LrExportSession'
 local LrTasks = import 'LrTasks'
+
+local prefs = LrPrefs.prefsForPlugin()
+
 -- Process pictures and save them as JPEG
 local function processPhotos(folderPath, photos, exportSettings)
     LrFunctionContext.callWithContext("export", function(exportContext)
@@ -91,7 +95,11 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                     LrTasks.sleep(1)
 
                     if #export > 0 then
-                        processPhotos(export, exportSettings)
+                        processPhotos(folder:getPath(), export, exportSettings)
+                        LrTasks.sleep(1)
+                        -- Mark folder as processed
+                        prefs.processedFolders[folder:getPath()] = true
+                        prefs.processedFolders = prefs.processedFolders
                     end
 
                     if progressScope:isCanceled() then
@@ -106,7 +114,14 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                 for _, subFolder in pairs(folder:getChildren()) do
                     processFoldersRecursively(subFolder, processedPhotos)
                 end
-                processFolder(folder, processedPhotos)
+                if not prefs.processedFolders[folder:getPath()] then
+                    processFolder(folder, processedPhotos)
+                end
+            end
+
+            -- Initialize processed folders list if not present
+            if not prefs.processedFolders then
+                prefs.processedFolders = {}
             end
 
             local folders = LrCatalog:getFolders()
