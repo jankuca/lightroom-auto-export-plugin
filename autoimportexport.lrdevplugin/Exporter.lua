@@ -6,7 +6,6 @@ local LrView = import 'LrView'
 
 local LrExportSession = import 'LrExportSession'
 local LrTasks = import 'LrTasks'
-
 -- Process pictures and save them as JPEG
 local function processPhotos(photos, exportSettings)
     LrFunctionContext.callWithContext("export", function(exportContext)
@@ -64,9 +63,8 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
             end
         end
 
-        local export = {}
-
         for _, folder in pairs(folders) do
+            local export = {}
             local photos = folder:getPhotos()
 
             for _, photo in pairs(photos) do
@@ -99,12 +97,12 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                     })
                 end
             end
-        end
 
-        LrTasks.sleep(1)
+            LrTasks.sleep(1)
 
-        if #export > 0 then
-            processPhotos(export, exportSettings)
+            if #export > 0 then
+                processPhotos(export, exportSettings)
+            end
         end
     end)
 end
