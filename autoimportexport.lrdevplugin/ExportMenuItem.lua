@@ -135,13 +135,34 @@ local function importFolder(LrCatalog, folder, processAll, exportSettings)
         local export = {}
 
         for _, photo in pairs(photos) do
-            if (photo:getRawMetadata("rating") ~= 3 and (processAll or photo:getRawMetadata("pickStatus") == 1)) then
-                LrCatalog:withWriteAccessDo("Apply Preset", (function(context)
-                    photo:setRawMetadata("rating", 3)
-                    table.insert(export, photo)
-                end), {
-                    timeout = 30
-                })
+            local keywords = photo:getRawMetadata("keywords")
+            local skipPhoto = false
+            for _, keyword in pairs(keywords) do
+                if keyword:getName() == "Auto-exported" then
+                    skipPhoto = true
+                    break
+                end
+            end
+
+                if not skipPhoto and (processAll or photo:getRawMetadata("pickStatus") == 1) then
+                    LrCatalog:withWriteAccessDo("Add Keyword", (function(context)
+                        local keywords = LrCatalog:getKeywords()
+                        local autoExportedKeyword = nil
+                        for _, keyword in pairs(keywords) do
+                            if keyword:getName() == "Auto-exported" then
+                                autoExportedKeyword = keyword
+                                break
+                            end
+                        end
+                        if not autoExportedKeyword then
+                            autoExportedKeyword = LrCatalog:createKeyword("Auto-exported", {}, false, nil, true)
+                        end
+                        photo:addKeyword(autoExportedKeyword)
+                        table.insert(export, photo)
+                    end), {
+                        timeout = 30
+                    })
+                end
             end
         end
 
