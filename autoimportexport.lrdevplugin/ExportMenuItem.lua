@@ -89,20 +89,27 @@ local function processPhotos(photos, exportSettings)
 end
 
 -- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
-local function importFolder(LrCatalog, folder, processAll, exportSettings)
+local function processLightroomFolders(LrCatalog, processAll, exportSettings)
     LrTasks.startAsyncTask(function()
-        local photos = folder:getPhotos()
+        local folders = {}
+        for _, folder in pairs(LrCatalog:getFolders()) do
+                table.insert(folders, folder)
+        end
+
         local export = {}
 
-        for _, photo in pairs(photos) do
-            local keywords = photo:getRawMetadata("keywords")
-            local skipPhoto = false
-            for _, keyword in pairs(keywords) do
-                if keyword:getName() == "Auto-exported" then
-                    skipPhoto = true
-                    break
+        for _, folder in pairs(folders) do
+            local photos = folder:getPhotos()
+
+            for _, photo in pairs(photos) do
+                local keywords = photo:getRawMetadata("keywords")
+                local skipPhoto = false
+                for _, keyword in pairs(keywords) do
+                    if keyword:getName() == "Auto-exported" then
+                        skipPhoto = true
+                        break
+                    end
                 end
-            end
 
                 if not skipPhoto and (processAll or photo:getRawMetadata("pickStatus") == 1) then
                     LrCatalog:withWriteAccessDo("Add Keyword", (function(context)
@@ -168,15 +175,9 @@ local function customPicker()
                 LrTasks.startAsyncTask(function()
                     while watcherRunning do
                         props.watcherStatus = "Running - # runs: " .. index
-                        LrDialogs.showBezel("Processing images.")
-                        if catalogFolders[folderIndex[props.folderField.value]] then
-                            importFolder(LrCatalog, catalogFolders[folderIndex[props.folderField.value]], processAll,
-                                props.exportSettings)
-                        else
-                            watcherRunning = false
-                            LrDialogs.message("No folder selected",
-                                "No folder selected, please select a folder in the dropdown and then click inside of the 'Output folder' field.")
-                        end
+                        LrDialogs.showBezel("Processing images.", 0.4)
+                        processLightroomFolders(LrCatalog, processAll, props.exportSettings)
+
                         if LrTasks.canYield() then
                             LrTasks.yield()
                         end
@@ -200,14 +201,6 @@ local function customPicker()
                         title = LrView.bind("watcherStatus")
                     }
                 },
-                f:row{f:static_text{
-                    alignment = "right",
-                    width = LrView.share "label_width",
-                    title = "Lightroom folder: "
-                }, props.folderField},
-                f:row{f:static_text{
-                    title = "Please press 'Tab' after selecting the Lightroom folder"
-                }},
                 f:row{
                     fill_horizontal = 1,
                     f:static_text{
@@ -284,28 +277,18 @@ local function customPicker()
                         title = "Process flagged",
 
                         action = function()
-                            if props.folderField.value ~= "" then
-                                props.watcherStatus = "Working"
-                                importFolder(LrCatalog, catalogFolders[folderIndex[props.folderField.value]], false,
-                                    props.exportSettings)
-                                props.watcherStatus = "Processed once"
-                            else
-                                LrDialogs.message("Please select an input folder")
-                            end
+                            props.watcherStatus = "Working"
+                            processLightroomFolders(LrCatalog, false, props.exportSettings)
+                            props.watcherStatus = "Processed once"
                         end
                     },
                     f:push_button{
                         title = "Process all",
 
                         action = function()
-                            if props.folderField.value ~= "" then
-                                props.watcherStatus = "Working"
-                                importFolder(LrCatalog, catalogFolders[folderIndex[props.folderField.value]], true,
-                                    props.exportSettings)
-                                props.watcherStatus = "Processed once"
-                            else
-                                LrDialogs.message("Please select an input folder")
-                            end
+                            props.watcherStatus = "Working"
+                            processLightroomFolders(LrCatalog, true, props.exportSettings)
+                            props.watcherStatus = "Processed once"
                         end
                     }
                 }, f:column{
@@ -315,11 +298,7 @@ local function customPicker()
 
                         action = function()
                             watcherRunning = true
-                            if props.folderField.value ~= "" then
-                                watch(false)
-                            else
-                                LrDialogs.message("Please select an input folder")
-                            end
+                            watch(false)
                         end
                     },
                     f:push_button{
@@ -327,12 +306,9 @@ local function customPicker()
 
                         action = function()
                             watcherRunning = true
-                            if props.folderField.value ~= "" then
-                                props.watcherStatus = "Running"
-                                watch(true)
-                            else
-                                LrDialogs.message("Please select an input folder")
-                            end
+                            props.watcherStatus = "Running"
+                            watch(true)
+
                         end
                     }
                 }, f:push_button{
