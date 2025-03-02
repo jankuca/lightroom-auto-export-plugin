@@ -10,9 +10,17 @@ local LrTasks = import 'LrTasks'
 local function processPhotos(photos, exportSettings)
     LrFunctionContext.callWithContext("export", function(exportContext)
         local props = LrBinding.makePropertyTable(exportContext)
-        props.caption = "Starting export..."
-        props.portionComplete = 0
+        props.caption = "Starting…"
+        props.photosProcessed = 0
         props.stopRequested = false
+
+        local exportSession = LrExportSession({
+            photosToExport = photos,
+            exportSettings = exportSettings
+        })
+
+        local numPhotos = exportSession:countRenditions()
+
         local f = LrView.osFactory()
         local contents = f:column{
             spacing = f:dialog_spacing(),
@@ -25,35 +33,43 @@ local function processPhotos(photos, exportSettings)
                     fill_horizontal = 1
                 }
             },
-            f:row{
-                fill_horizontal = 1,
-                f:static_text{
-                    title = "Progress",
-                    alignment = "right",
-                    width = LrView.share "label_width"
+            f:view{
+                visible = LrView.bind {
+                    bind_to_object = props,
+                    key = "photosProcessed",
+                    transform = function(photosProcessed)
+                        return photosProcessed ~= numPhotos
+                    end
                 },
-                f:slider{
-                    value = LrView.bind("portionComplete"),
-                    min = 0,
-                    max = 1,
+                f:row{
                     fill_horizontal = 1,
-                    enabled = false
+                    f:static_text{
+                        title = LrView.bind {
+                            key = "photosProcessed",
+                            transform = function(photosProcessed)
+                                return string.format("%d/%d", photosProcessed + 1, numPhotos)
+                            end
+                        },
+                        fill_horizontal = 1
+                    }
                 }
             },
-            f:row{
-                fill_horizontal = 1,
-                f:push_button{
-                    title = "Stop",
-                    visible = LrView.bind {
-                        keys = {"stopRequested", "portionComplete"},
-                        transform = function(_, props)
-                            return not props.stopRequested and props.portionComplete < 1
-                        end
-                    },
-                    action = function()
-                        props.stopRequested = true
-                        LrDialogs.stopModalWithResult(props)
+            f:view{
+                visible = LrView.bind {
+                    bind_to_object = props,
+                    key = "photosProcessed",
+                    transform = function(photosProcessed)
+                        return photosProcessed ~= numPhotos
                     end
+                },
+                f:row{
+                    fill_horizontal = 1,
+                    f:push_button{
+                        title = "Stop",
+                        action = function()
+                            props.stopRequested = true
+                        end
+                    }
                 }
             }
         }
@@ -75,13 +91,6 @@ local function processPhotos(photos, exportSettings)
             blockTask = false
         })
 
-        local exportSession = LrExportSession({
-            photosToExport = photos,
-            exportSettings = exportSettings
-        })
-
-        local numPhotos = exportSession:countRenditions()
-
         local renditionParams = {
             progressScope = progressScope,
             renderProgressPortion = 1,
@@ -90,21 +99,22 @@ local function processPhotos(photos, exportSettings)
 
         for i, rendition in exportSession:renditions(renditionParams) do
             if props.stopRequested then
-                props.caption = "Processing stopped"
                 break
             end
 
             local progressCaption = rendition.photo:getFormattedMetadata("fileName") .. " (" .. i .. "/" .. numPhotos ..
                                         ")"
-            props.caption = "Processing " .. progressCaption
-            props.portionComplete = (i - 1) / numPhotos
+            props.caption = "Exporting photo " .. progressCaption
+            props.photosProcessed = i
 
             rendition:waitForRender()
         end
 
-        if not props.stopRequested then
-            props.caption = "Processing complete"
-            props.portionComplete = 1
+        props.photosProcessed = numPhotos
+        if props.stopRequested then
+            props.caption = "Exporting stopped"
+        else
+            props.caption = "Exporting complete"
         end
     end)
 end
