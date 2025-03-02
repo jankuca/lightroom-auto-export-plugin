@@ -13,7 +13,7 @@ local prefs = LrPrefs.prefsForPlugin()
 
 -- Process pictures and save them as JPEG
 local function processPhotos(folderPath, photos, exportSettings, progressScope)
-    LrFunctionContext.callWithContext("export", function(exportContext)
+    return LrFunctionContext.callWithContext("export", function(exportContext)
         progressScope:setCaption("Exporting… 0/" .. #photos)
 
         local exportSession = LrExportSession({
@@ -47,7 +47,6 @@ local function processPhotos(folderPath, photos, exportSettings, progressScope)
         else
             progressScope:setCaption("Done")
         end
-
     end)
 end
 
@@ -56,8 +55,7 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
     LrTasks.startAsyncTask(function()
         LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
             local function processFolder(folder, processedPhotos)
-                LrFunctionContext.callWithContext("processFolder", function(folderContext)
-
+                return LrFunctionContext.callWithContext("processFolder", function(folderContext)
                     local folderPathParts = {}
                     for part in string.gmatch(folder:getPath(), "[^/\\]+") do
                         table.insert(folderPathParts, part)
@@ -104,21 +102,30 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                         prefs.processedFolders = prefs.processedFolders
                     end
 
-                    if progressScope:isCanceled() then
-                        return
-                    end
-
+                    local canceled = progressScope:isCanceled()
                     progressScope:done()
+
+                    return {
+                        canceled = canceled
+                    }
                 end)
             end
 
             local function processFoldersRecursively(folder, processedPhotos)
                 for _, subFolder in pairs(folder:getChildren()) do
-                    processFoldersRecursively(subFolder, processedPhotos)
+                    local recursiveResult = processFoldersRecursively(subFolder, processedPhotos)
+                    if recursiveResult['canceled'] then
+                        return recursiveResult
+                    end
                 end
-                if not prefs.processedFolders[folder:getPath()] then
-                    processFolder(folder, processedPhotos)
+
+                if prefs.processedFolders[folder:getPath()] then
+                    return {
+                        canceled = false
+                    }
                 end
+
+                return processFolder(folder, processedPhotos)
             end
 
             -- Initialize processed folders list if not present
@@ -129,7 +136,11 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
             local folders = LrCatalog:getFolders()
             local processedPhotos = {}
             for _, folder in pairs(folders) do
-                processFoldersRecursively(folder, processedPhotos)
+                local result = processFoldersRecursively(folder, processedPhotos)
+                if result['canceled'] then
+                    LrDialogs.showBezel('Processing canceled', 0.5)
+                    break
+                end
             end
         end)
     end)
