@@ -4,85 +4,45 @@ local LrFunctionContext = import 'LrFunctionContext'
 local LrBinding = import 'LrBinding'
 local LrView = import 'LrView'
 local LrPathUtils = import 'LrPathUtils'
+local LrPrefs = import 'LrPrefs'
 
 local LrApplication = import 'LrApplication'
 local LrExportSession = import 'LrExportSession'
 local LrTasks = import 'LrTasks'
 
-local allowedExportSettings = {
-    collisionHandling = "LR_collisionHandling",
-    contentCredentials_include_connectedAccounts = "LR_contentCredentials_include_connectedAccounts",
-    contentCredentials_include_editsAndActivity = "LR_contentCredentials_include_editsAndActivity",
-    contentCredentials_include_producer = "LR_contentCredentials_include_producer",
-    contentCredentials_include_status = "LR_contentCredentials_include_status",
-    embeddedMetadataOption = "LR_embeddedMetadataOption",
-    enableHDRDisplay = "LR_enableHDRDisplay",
-    exportServiceProvider = "LR_exportServiceProvider",
-    exportServiceProviderTitle = "LR_exportServiceProviderTitle",
-    export_bitDepth = "LR_export_bitDepth",
-    export_colorSpace = "LR_export_colorSpace",
-    export_destinationPathPrefix = "LR_export_destinationPathPrefix",
-    export_destinationPathSuffix = "LR_export_destinationPathSuffix",
-    export_destinationType = "LR_export_destinationType",
-    export_postProcessing = "LR_export_postProcessing",
-    export_useParentFolder = "LR_export_useParentFolder",
-    export_useSubfolder = "LR_export_useSubfolder",
-    export_videoFileHandling = "LR_export_videoFileHandling",
-    export_videoFormat = "LR_export_videoFormat",
-    export_videoPreset = "LR_export_videoPreset",
-    extensionCase = "LR_extensionCase",
-    format = "LR_format",
-    includeFaceTagsAsKeywords = "LR_includeFaceTagsAsKeywords",
-    includeFaceTagsInIptc = "LR_includeFaceTagsInIptc",
-    includeVideoFiles = "LR_includeVideoFiles",
-    initialSequenceNumber = "LR_initialSequenceNumber",
-    jpeg_limitSize = "LR_jpeg_limitSize",
-    jpeg_quality = "LR_jpeg_quality",
-    jpeg_useLimitSize = "LR_jpeg_useLimitSize",
-    markedPresets = "LR_markedPresets",
-    maximumCompatibility = "LR_maximumCompatibility",
-    metadata_keywordOptions = "LR_metadata_keywordOptions",
-    outputSharpeningLevel = "LR_outputSharpeningLevel",
-    outputSharpeningMedia = "LR_outputSharpeningMedia",
-    outputSharpeningOn = "LR_outputSharpeningOn",
-    reimportExportedPhoto = "LR_reimportExportedPhoto",
-    reimport_stackWithOriginal = "LR_reimport_stackWithOriginal",
-    reimport_stackWithOriginal_position = "LR_reimport_stackWithOriginal_position",
-    removeFaceMetadata = "LR_removeFaceMetadata",
-    removeLocationMetadata = "LR_removeLocationMetadata",
-    renamingTokensOn = "LR_renamingTokensOn",
-    selectedTextFontFamily = "LR_selectedTextFontFamily",
-    selectedTextFontSize = "LR_selectedTextFontSize",
-    size_doConstrain = "LR_size_doConstrain",
-    size_doNotEnlarge = "LR_size_doNotEnlarge",
-    size_maxHeight = "LR_size_maxHeight",
-    size_maxWidth = "LR_size_maxWidth",
-    size_percentage = "LR_size_percentage",
-    size_resizeType = "LR_size_resizeType",
-    size_resolution = "LR_size_resolution",
-    size_resolutionUnits = "LR_size_resolutionUnits",
-    size_units = "LR_size_units",
-    size_userWantsConstrain = "LR_size_userWantsConstrain",
-    tokenCustomString = "LR_tokenCustomString",
-    tokens = "LR_tokens",
-    tokensArchivedToString2 = "LR_tokensArchivedToString2",
-    useWatermark = "LR_useWatermark",
-    watermarking_id = "LR_watermarking_id"
-}
+local ExportSettings = require 'ExportSettings'
 
-local function parsePreset(exportPreset)
-    -- After this operation the variable s exists with the presets
-    (loadfile(exportPreset[1]))()
+-- Load saved export settings on plugin initialization
+local function loadPropsForContext(context)
+    local props = LrBinding.makePropertyTable(context)
 
-    local exportSettings = {}
+    props.exportSettings = ExportSettings.loadExportSettings()
 
-    for key, value in pairs(s.value) do
-        if allowedExportSettings[key] then
-            exportSettings[allowedExportSettings[key]] = value
-        end
+    if props.exportSettings then
+        props.outputFolderPath = props.exportSettings["LR_export_destinationPathPrefix"]
+    else
+        props.outputFolderPath = homePath .. seperator .. "Downloads"
+        props.exportSettings = {
+            LR_collisionHandling = "rename",
+            LR_export_bitDepth = "8",
+            LR_export_colorSpace = "sRGB",
+            LR_export_destinationPathPrefix = props.outputFolderPath,
+            LR_export_destinationType = "specificFolder",
+            LR_export_useSubfolder = false,
+            LR_format = "JPEG",
+            LR_jpeg_quality = 1,
+            LR_minimizeEmbeddedMetadata = true,
+            LR_outputSharpeningOn = false,
+            LR_reimportExportedPhoto = false,
+            LR_renamingTokensOn = true,
+            LR_size_doNotEnlarge = true,
+            LR_size_units = "pixels",
+            LR_tokens = "{{image_name}}",
+            LR_useWatermark = false
+        }
     end
 
-    return exportSettings
+    return props
 end
 
 -- Process pictures and save them as JPEG
@@ -177,46 +137,16 @@ end
 -- GUI specification
 local function customPicker()
     LrFunctionContext.callWithContext("showCustomDialogWithObserver", function(context)
-
-        local props = LrBinding.makePropertyTable(context)
+        local props = loadPropsForContext(context)
         local f = LrView.osFactory()
 
-        local operatingSystem = ""
-        local seperator = ""
-
+        local seperator = "/"
         local homePath = LrPathUtils.getStandardFilePath("home")
-
         if string.find(homePath, "\\") then
-            operatingSystem = "Windows"
             seperator = "\\"
-        else
-            operatingSystem = "MacOS"
-            seperator = "/"
         end
 
         props.watcherStatus = "Not started"
-        props.selectedLightroomFolder = ""
-        props.outputFolderPath = homePath .. seperator .. "Downloads"
-
-        props.presetSelected = "Default"
-        props.exportSettings = {
-            LR_collisionHandling = "rename",
-            LR_export_bitDepth = "8",
-            LR_export_colorSpace = "sRGB",
-            LR_export_destinationPathPrefix = props.outputFolderPath,
-            LR_export_destinationType = "specificFolder",
-            LR_export_useSubfolder = false,
-            LR_format = "JPEG",
-            LR_jpeg_quality = 1,
-            LR_minimizeEmbeddedMetadata = true,
-            LR_outputSharpeningOn = false,
-            LR_reimportExportedPhoto = false,
-            LR_renamingTokensOn = true,
-            LR_size_doNotEnlarge = true,
-            LR_size_units = "pixels",
-            LR_tokens = "{{image_name}}",
-            LR_useWatermark = false
-        }
 
         local numCharacters = 40
         local watcherRunning = false
@@ -231,11 +161,6 @@ local function customPicker()
                 folderCombo[i] = folder:getName()
                 folderIndex[folder:getName()] = i
             end
-
-            props.folderField = f:combo_box{
-                value = LrView.bind("selectedLightroomFolder"),
-                items = folderCombo
-            }
 
             -- Watcher, executes function and then sleeps 60 seconds using PowerShell
             local function watch(processAll)
@@ -275,17 +200,6 @@ local function customPicker()
                         title = LrView.bind("watcherStatus")
                     }
                 },
-                f:row{
-                    fill_horizontal = 1,
-                    f:static_text{
-                        alignment = "right",
-                        width = LrView.share "label_width",
-                        title = "Operating system: "
-                    },
-                    f:static_text{
-                        title = operatingSystem
-                    }
-                },
                 f:row{f:static_text{
                     alignment = "right",
                     width = LrView.share "label_width",
@@ -315,10 +229,9 @@ local function customPicker()
                             if exportPreset then
                                 local filename = exportPreset[1]
                                 local filenameLength = #filename
-                                props.presetSelected = string.sub(filename, filenameLength - numCharacters + 1,
-                                    filenameLength)
+                                props.exportSettings = ExportSettings.parsePreset(exportPreset)
+                                ExportSettings.saveExportSettings(props.exportSettings)
                             end
-                            props.exportSettings = parsePreset(exportPreset)
                             if props.exportSettings["LR_export_destinationPathPrefix"] then
                                 props.outputFolderPath = props.exportSettings["LR_export_destinationPathPrefix"]
                             end
@@ -349,6 +262,8 @@ local function customPicker()
                         }
                         if exportFolder then
                             props.outputFolderPath = exportFolder[1]
+                            props.exportSettings["LR_export_destinationPathPrefix"] = props.outputFolderPath
+                            ExportSettings.saveExportSettings(props.exportSettings)
                         end
                     end
                 }},
