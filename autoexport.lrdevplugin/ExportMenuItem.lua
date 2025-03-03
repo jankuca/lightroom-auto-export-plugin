@@ -11,43 +11,9 @@ local LrTasks = import 'LrTasks'
 local ExportSettings = require 'ExportSettings'
 local Exporter = require 'Exporter'
 
--- Load saved export settings on plugin initialization
-local function loadPropsForContext(context)
-    local props = LrBinding.makePropertyTable(context)
-
-    props.exportSettings = ExportSettings.loadExportSettings()
-
-    if props.exportSettings then
-        props.outputFolderPath = props.exportSettings["LR_export_destinationPathPrefix"]
-    else
-        props.outputFolderPath = homePath .. seperator .. "Downloads"
-        props.exportSettings = {
-            LR_collisionHandling = "rename",
-            LR_export_bitDepth = "8",
-            LR_export_colorSpace = "sRGB",
-            LR_export_destinationPathPrefix = props.outputFolderPath,
-            LR_export_destinationType = "specificFolder",
-            LR_export_useSubfolder = false,
-            LR_format = "JPEG",
-            LR_jpeg_quality = 1,
-            LR_minimizeEmbeddedMetadata = true,
-            LR_outputSharpeningOn = false,
-            LR_reimportExportedPhoto = false,
-            LR_renamingTokensOn = true,
-            LR_size_doNotEnlarge = true,
-            LR_size_units = "pixels",
-            LR_tokens = "{{image_name}}",
-            LR_useWatermark = false
-        }
-    end
-
-    return props
-end
-
 -- GUI specification
 local function customPicker()
     LrFunctionContext.callWithContext("showCustomDialogWithObserver", function(context)
-        local props = loadPropsForContext(context)
         local f = LrView.osFactory()
 
         local seperator = "/"
@@ -59,6 +25,10 @@ local function customPicker()
         local numCharacters = 40
 
         local prefs = LrPrefs.prefsForPlugin()
+
+        -- copy values from prefs to props
+        local props = LrBinding.makePropertyTable(context)
+        props.exportSettings = prefs.exportSettings
         props.onlyExportPicked = prefs.onlyExportPicked or false
 
         local c = f:column{
@@ -66,98 +36,98 @@ local function customPicker()
             spacing = f:dialog_spacing(),
             f:row{
                 fill_horizontal = 1,
+                spacing = f:control_spacing(),
                 f:static_text{
                     alignment = "right",
                     width = LrView.share "label_width",
                     title = "Select export preset:"
                 },
-                f:push_button{
-                    title = "Select",
-                    action = function()
-                        local exportPreset = LrDialogs.runOpenPanel {
-                            title = "Select Export Settings",
-                            canChooseFiles = true,
-                            canChooseDirectories = false,
-                            canCreateDirectories = false,
-                            allowedFileTypes = {'lrtemplate', 'xmp'},
-                            multipleSelection = false
-                        }
-                        if exportPreset then
-                            local filename = exportPreset[1]
-                            local filenameLength = #filename
-                            props.exportSettings = ExportSettings.parsePreset(exportPreset)
-                            ExportSettings.saveExportSettings(props.exportSettings)
+                f:column{
+                    spacing = f:control_spacing(),
+                    f:push_button{
+                        title = "Select export preset file",
+                        action = function()
+                            local exportPreset = LrDialogs.runOpenPanel {
+                                title = "Select Export Settings",
+                                canChooseFiles = true,
+                                canChooseDirectories = false,
+                                canCreateDirectories = false,
+                                allowedFileTypes = {'lrtemplate', 'xmp'},
+                                multipleSelection = false
+                            }
+                            if exportPreset then
+                                local filename = exportPreset[1]
+                                local filenameLength = #filename
+                                props.exportSettings = ExportSettings.parsePreset(exportPreset)
+                            end
                         end
-                        if props.exportSettings["LR_export_destinationPathPrefix"] then
-                            props.outputFolderPath = props.exportSettings["LR_export_destinationPathPrefix"]
-                        end
-                    end
+                    },
+                    f:static_text{
+                        fill_horizontal = 1,
+                        title = "Define an export preset in the Export dialog first and export it to disk."
+                    }
                 }
             },
-            f:row{f:static_text{
-                alignment = "right",
-                width = LrView.share "label_width",
-                title = "Export folder: "
-            }, f:push_button{
-                title = "Select export Folder",
-                action = function()
-                    exportFolder = LrDialogs.runOpenPanel {
-                        title = "Select Export Settings",
-                        canChooseFiles = false,
-                        canChooseDirectories = true,
-                        canCreateDirectories = true,
-                        multipleSelection = false
-                    }
-                    if exportFolder then
-                        props.outputFolderPath = exportFolder[1]
-                        props.exportSettings["LR_export_destinationPathPrefix"] = props.outputFolderPath
-                        ExportSettings.saveExportSettings(props.exportSettings)
-                    end
-                end
-            }},
-            f:row{f:static_text{
-                alignment = "right",
-                width = LrView.share "label_width",
-                title = "Export folder selected:"
-            }, f:static_text{
-                width_in_chars = numCharacters,
-                title = LrView.bind({
-                    keys = {"outputFolderPath", "exportSettings"},
-                    transform = function()
-                        props.exportSettings["LR_export_destinationPathPrefix"] = props.outputFolderPath
-                        if props.exportSettings["LR_export_destinationPathSuffix"] then
-                            return props.exportSettings["LR_export_destinationPathPrefix"] .. seperator ..
-                                       props.exportSettings["LR_export_destinationPathSuffix"]
-                        else
-                            return props.exportSettings["LR_export_destinationPathPrefix"]
-                        end
-                    end
-                })
-            }},
-            f:row{f:checkbox{
-                title = "Only process picked items",
-                value = LrView.bind("onlyExportPicked"),
-                checked_value = true,
-                unchecked_value = false,
-                action = function(checked)
-                    props.onlyExportPicked = checked
-                    prefs.onlyExportPicked = checked
-                end
-            }},
 
             f:row{
                 fill_horizontal = 1,
-                f:separator{
-                    fill_horizontal = 1
+                spacing = f:control_spacing(),
+                f:static_text{
+                    alignment = "right",
+                    width = LrView.share "label_width",
+                    title = "Export folder: "
+                },
+                f:push_button{
+                    title = "Select export Folder",
+                    action = function()
+                        exportFolder = LrDialogs.runOpenPanel {
+                            title = "Select Export Settings",
+                            canChooseFiles = false,
+                            canChooseDirectories = true,
+                            canCreateDirectories = true,
+                            multipleSelection = false
+                        }
+                        if exportFolder then
+                            props.exportSettings["LR_export_destinationPathPrefix"] = exportFolder[1]
+                        end
+                    end
+                },
+                f:static_text{
+                    fill_horizontal = 1,
+                    title = LrView.bind({
+                        key = "exportSettings",
+                        transform = function(exportSettings)
+                            if not exportSettings or not exportSettings["LR_export_destinationPathPrefix"] then
+                                return "(Choose)"
+                            end
+
+                            local prefix = exportSettings["LR_export_destinationPathPrefix"]
+                            local suffix = exportSettings["LR_export_destinationPathSuffix"]
+
+                            if suffix and suffix ~= "" then
+                                return LrPathUtils.child(prefix, suffix)
+                            else
+                                return prefix
+                            end
+                        end
+                    })
                 }
             },
 
-            f:push_button{
-                title = "Clear processed folders",
-                action = function()
-                    prefs.processedFolders = {}
-                    LrDialogs.showBezel("List of processed folders cleared", 2)
-                end
+            f:row{
+                fill_horizontal = 1,
+                spacing = f:control_spacing(),
+                f:static_text{
+                    alignment = "right",
+                    width = LrView.share "label_width",
+                    title = ""
+                },
+                f:checkbox{
+                    title = "Only export picked items",
+                    value = LrView.bind "onlyExportPicked",
+                    checked_value = true,
+                    unchecked_value = false
+                }
             },
 
             f:row{
@@ -172,35 +142,104 @@ local function customPicker()
                 f:static_text{
                     alignment = "right",
                     width = LrView.share "label_width",
-                    title = "Current export settings:"
+                    title = "Export settings:"
                 },
-                f:edit_field{
-                    width_in_chars = numCharacters,
-                    height_in_lines = 60,
-                    font = "<system/small/monospace>",
-                    value = LrView.bind({
-                        keys = {"exportSettings"},
-                        transform = function()
-                            local settings = ""
-                            for key, value in pairs(props.exportSettings) do
-                                settings = settings .. key .. ": " .. tostring(value) .. "\n"
+                f:column{
+                    fill_horizontal = 1,
+                    spacing = f:control_spacing(),
+                    f:scrolled_view{
+                        fill_horizontal = 1,
+                        height = 100,
+                        view = f:static_text{
+                            fill_horizontal = 1,
+                            width = 400,
+                            height_in_lines = 60,
+                            title = LrView.bind({
+                                key = "exportSettings",
+                                transform = function(exportSettings)
+                                    if not exportSettings then
+                                        return ""
+                                    end
+
+                                    local elements = {}
+                                    for key, value in pairs(exportSettings) do
+                                        table.insert(elements, key .. ": " .. tostring(value))
+                                    end
+                                    return table.concat(elements, "\n")
+                                end
+                            })
+                        }
+                    },
+                    f:row{
+                        fill_horizontal = 1,
+                        spacing = f:control_spacing(),
+                        f:push_button{
+                            title = "Clear export settings",
+                            action = function()
+                                props.exportSettings = nil
                             end
-                            return settings
+                        },
+                        f:static_text{
+                            fill_horizontal = 1,
+                            title = "Use this to prevent further auto-export runs"
+                        }
+                    }
+                }
+            },
+
+            f:row{
+                fill_horizontal = 1,
+                f:separator{
+                    fill_horizontal = 1
+                }
+            },
+
+            f:row{
+                fill_horizontal = 1,
+                spacing = f:control_spacing(),
+                f:static_text{
+                    alignment = "right",
+                    width = LrView.share "label_width",
+                    title = "Processed folders: "
+                },
+                f:column{
+                    fill_horizontal = 1,
+                    spacing = f:control_spacing(),
+                    f:static_text{
+                        fill_horizontal = 1,
+                        title = LrView.bind({
+                            bind_to_object = prefs,
+                            key = "processedFolders",
+                            transform = function(processedFolders)
+                                local count = 0
+                                for _ in pairs(processedFolders) do
+                                    count = count + 1
+                                end
+                                return tostring(count)
+                            end
+                        })
+                    },
+                    f:push_button{
+                        title = "Clear processed folders",
+                        action = function()
+                            prefs.processedFolders = {}
+                            LrDialogs.showBezel("List of processed folders cleared", 2)
                         end
-                    }),
-                    enabled = false
+                    }
                 }
             }
         }
 
-        LrDialogs.presentModalDialog {
+        local result = LrDialogs.presentModalDialog {
             title = "Auto-export settings",
             contents = c,
-            buttons = {{
-                title = "Done"
-            }}
+            actionVerb = "Save settings"
         }
 
+        if result == 'ok' then
+            prefs.exportSettings = props.exportSettings
+            prefs.onlyExportPicked = props.onlyExportPicked
+        end
     end)
 end
 
