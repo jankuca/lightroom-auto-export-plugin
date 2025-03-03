@@ -30,6 +30,7 @@ local function customPicker()
         local props = LrBinding.makePropertyTable(context)
         props.exportSettings = prefs.exportSettings
         props.onlyExportPicked = prefs.onlyExportPicked or false
+        props.runOnStartup = prefs.runOnStartup or false
 
         local c = f:column{
             bind_to_object = props,
@@ -125,6 +126,22 @@ local function customPicker()
                 f:checkbox{
                     title = "Only export picked items",
                     value = LrView.bind "onlyExportPicked",
+                    checked_value = true,
+                    unchecked_value = false
+                }
+            },
+
+            f:row{
+                fill_horizontal = 1,
+                spacing = f:control_spacing(),
+                f:static_text{
+                    alignment = "right",
+                    width = LrView.share "label_width",
+                    title = ""
+                },
+                f:checkbox{
+                    title = "Run auto-export automatically on Lightroom startup",
+                    value = LrView.bind "runOnStartup",
                     checked_value = true,
                     unchecked_value = false
                 }
@@ -239,6 +256,7 @@ local function customPicker()
         if result == 'ok' then
             prefs.exportSettings = props.exportSettings
             prefs.onlyExportPicked = props.onlyExportPicked
+            prefs.runOnStartup = props.runOnStartup
         end
     end)
 end
