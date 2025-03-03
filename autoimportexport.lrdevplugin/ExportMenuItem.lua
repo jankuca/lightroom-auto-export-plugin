@@ -182,6 +182,7 @@ local function customPicker()
                 f:edit_field{
                     width_in_chars = numCharacters,
                     height_in_lines = 60,
+                    font = "<system/small/monospace>",
                     value = LrView.bind({
                         keys = {"exportSettings"},
                         transform = function()
