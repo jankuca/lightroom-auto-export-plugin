@@ -17,6 +17,8 @@ return {
         file = "ExportMenuItem.lua"
     },
 
+    LrMetadataProvider = "LrMetadataProvider.lua",
+
     LrInitPlugin = "LrInitPlugin.lua",
     LrForceInitPlugin = true
 }
