@@ -96,13 +96,16 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
 
                     if #export > 0 then
                         processPhotos(folder:getPath(), export, exportSettings, progressScope)
+                    end
+
+                    local canceled = progressScope:isCanceled()
+                    if not canceled then
                         LrTasks.sleep(1)
                         -- Mark folder as processed
                         prefs.processedFolders[folder:getPath()] = true
                         prefs.processedFolders = prefs.processedFolders
                     end
 
-                    local canceled = progressScope:isCanceled()
                     progressScope:done()
 
                     return {
