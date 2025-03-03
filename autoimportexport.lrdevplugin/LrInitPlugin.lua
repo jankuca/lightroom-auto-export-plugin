@@ -13,6 +13,8 @@ else
 end
 
 LrTasks.startAsyncTask(function()
+    LrTasks.sleep(5)
+
     local LrCatalog = LrApplication.activeCatalog()
     local processAll = true
     Exporter.processLightroomFolders(LrCatalog, processAll, exportSettings)
