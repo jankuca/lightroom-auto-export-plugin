@@ -5,6 +5,7 @@ local LrBinding = import 'LrBinding'
 local LrView = import 'LrView'
 local LrPathUtils = import 'LrPathUtils'
 local LrPrefs = import 'LrPrefs'
+local LrFileUtils = import 'LrFileUtils'
 
 local LrExportSession = import 'LrExportSession'
 local LrTasks = import 'LrTasks'
@@ -56,6 +57,14 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
         LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
             local function processFolder(folder, processedPhotos)
                 return LrFunctionContext.callWithContext("processFolder", function(folderContext)
+                    if not LrFileUtils.exists(folder:getPath()) then
+                        -- LrDialogs.showBezel("Folder " .. folder:getPath() .. " is not available.")
+                        return {
+                            canceled = false,
+                            unavailable = true
+                        }
+                    end
+
                     local folderPathParts = {}
                     for part in string.gmatch(folder:getPath(), "[^/\\]+") do
                         table.insert(folderPathParts, part)
@@ -97,8 +106,10 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                         processPhotos(folder:getPath(), export, exportSettings, progressScope)
                     end
 
+                    local becameUnavailableDuringExport = not LrFileUtils.exists(folder:getPath())
+
                     local canceled = progressScope:isCanceled()
-                    if not canceled then
+                    if not canceled and not becameUnavailableDuringExport then
                         LrTasks.sleep(1)
                         -- Mark folder as processed
                         prefs.processedFolders[folder:getPath()] = true
@@ -108,12 +119,20 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                     progressScope:done()
 
                     return {
-                        canceled = canceled
+                        canceled = canceled,
+                        unavailable = becameUnavailableDuringExport
                     }
                 end)
             end
 
             local function processFoldersRecursively(folder, processedPhotos)
+                if not LrFileUtils.exists(folder:getPath()) then
+                    return {
+                        canceled = false,
+                        unavailable = true
+                    }
+                end
+
                 for _, subFolder in pairs(folder:getChildren()) do
                     local recursiveResult = processFoldersRecursively(subFolder, processedPhotos)
                     if recursiveResult['canceled'] then
@@ -123,7 +142,8 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
 
                 if prefs.processedFolders[folder:getPath()] then
                     return {
-                        canceled = false
+                        canceled = false,
+                        unavailable = false
                     }
                 end
 
