@@ -4,6 +4,7 @@ local LrFunctionContext = import 'LrFunctionContext'
 local LrBinding = import 'LrBinding'
 local LrView = import 'LrView'
 local LrPathUtils = import 'LrPathUtils'
+local LrPrefs = import 'LrPrefs'
 
 local LrTasks = import 'LrTasks'
 
@@ -221,6 +222,22 @@ local function customPicker()
                         props.watcherStatus = "Stopped after running"
                     end
                 }},
+
+                f:row{
+                    fill_horizontal = 1,
+                    f:separator{
+                        fill_horizontal = 1
+                    }
+                },
+
+                f:push_button{
+                    title = "Clear Processed Folders",
+                    action = function()
+                        local prefs = LrPrefs.prefsForPlugin()
+                        prefs.processedFolders = {}
+                        props.watcherStatus = "Processed folders cleared"
+                    end
+                },
 
                 f:row{
                     fill_horizontal = 1,
