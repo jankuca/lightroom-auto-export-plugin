@@ -92,9 +92,8 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
                         end
                     end
 
-                    LrTasks.sleep(1)
-
                     if #export > 0 then
+                        LrTasks.sleep(1)
                         processPhotos(folder:getPath(), export, exportSettings, progressScope)
                     end
 
