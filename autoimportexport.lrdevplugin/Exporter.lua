@@ -56,54 +56,78 @@ end
 -- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
 local function processLightroomFolders(LrCatalog, processAll, exportSettings)
     LrTasks.startAsyncTask(function()
-        local folders = {}
-        for _, folder in pairs(LrCatalog:getFolders()) do
-            if string.find(folder:getName(), "Autoexport") then
+        LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
+            local progressScope = LrProgressScope({
+                title = "Listing Folders and Files",
+                caption = "Starting...",
+                functionContext = context
+            })
+
+            local folders = {}
+            for _, folder in pairs(LrCatalog:getFolders()) do
+                progressScope:setCaption("Listing folder: " .. folder:getName())
                 table.insert(folders, folder)
+                if progressScope:isCanceled() then
+                    break
+                end
             end
-        end
+            for _, folder in pairs(folders) do
+                local export = {}
+                local photos = folder:getPhotos()
+                local totalPhotos = #photos
 
-        for _, folder in pairs(folders) do
-            local export = {}
-            local photos = folder:getPhotos()
+                for photoIndex, photo in pairs(photos) do
+                    local keywords = photo:getRawMetadata("keywords")
+                    local skipPhoto = false
+                    for _, keyword in pairs(keywords) do
+                        if keyword:getName() == "Auto-exported" then
+                            skipPhoto = true
+                            break
+                        end
+                    end
 
-            for _, photo in pairs(photos) do
-                local keywords = photo:getRawMetadata("keywords")
-                local skipPhoto = false
-                for _, keyword in pairs(keywords) do
-                    if keyword:getName() == "Auto-exported" then
-                        skipPhoto = true
+                    if not skipPhoto and (processAll or photo:getRawMetadata("pickStatus") == 1) then
+                        LrCatalog:withWriteAccessDo("Add Keyword", (function(context)
+                            local keywords = LrCatalog:getKeywords()
+                            local autoExportedKeyword = nil
+                            for _, keyword in pairs(keywords) do
+                                if keyword:getName() == "Auto-exported" then
+                                    autoExportedKeyword = keyword
+                                    break
+                                end
+                            end
+                            if not autoExportedKeyword then
+                                autoExportedKeyword = LrCatalog:createKeyword("Auto-exported", {}, false, nil, true)
+                            end
+                            -- photo:addKeyword(autoExportedKeyword)
+                            table.insert(export, photo)
+                        end), {
+                            timeout = 30
+                        })
+                    end
+
+                    local progressCaption = string.format("Folder %s: %d/%d", folder:getPath(), photoIndex, totalPhotos)
+                    progressScope:setCaption(progressCaption)
+                    progressScope:setPortionComplete(photoIndex, totalPhotos)
+
+                    if progressScope:isCanceled() then
                         break
                     end
                 end
 
-                if not skipPhoto and (processAll or photo:getRawMetadata("pickStatus") == 1) then
-                    LrCatalog:withWriteAccessDo("Add Keyword", (function(context)
-                        local keywords = LrCatalog:getKeywords()
-                        local autoExportedKeyword = nil
-                        for _, keyword in pairs(keywords) do
-                            if keyword:getName() == "Auto-exported" then
-                                autoExportedKeyword = keyword
-                                break
-                            end
-                        end
-                        if not autoExportedKeyword then
-                            autoExportedKeyword = LrCatalog:createKeyword("Auto-exported", {}, false, nil, true)
-                        end
-                        -- photo:addKeyword(autoExportedKeyword)
-                        table.insert(export, photo)
-                    end), {
-                        timeout = 30
-                    })
+                LrTasks.sleep(1)
+
+                if #export > 0 then
+                    processPhotos(export, exportSettings)
+                end
+
+                if progressScope:isCanceled() then
+                    break
                 end
             end
 
-            LrTasks.sleep(1)
-
-            if #export > 0 then
-                processPhotos(export, exportSettings)
-            end
-        end
+            progressScope:done()
+        end)
     end)
 end
 
