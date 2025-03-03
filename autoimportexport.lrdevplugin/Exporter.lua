@@ -83,6 +83,11 @@ end
 
 -- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
 local function processLightroomFolders(LrCatalog, exportSettings)
+    if not exportSettings then
+        LrDialogs.showBezel("Auto-export not set up", 2)
+        return
+    end
+
     LrTasks.startAsyncTask(function()
         LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
             local function processFolder(folder, processedPhotos)
