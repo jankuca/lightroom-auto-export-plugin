@@ -12,10 +12,10 @@ return {
     LrSdkVersion = 3.0,
     LrSdkMinimumVersion = 1.3, -- minimum SDK version required by this plug-in
 
-    LrExportMenuItems = {
+    LrExportMenuItems = {{
         title = "Auto-export settings",
-        file = "ExportMenuItem.lua"
-    },
+        file = "AutoExportSettingsMenuItem.lua"
+    }},
 
     LrMetadataProvider = "LrMetadataProvider.lua",
 
