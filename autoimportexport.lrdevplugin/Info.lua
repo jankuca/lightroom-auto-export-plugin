@@ -15,5 +15,8 @@ return {
         minor = 1,
         revision = 0,
         build = 20240420
-    }
+    },
+
+    LrInitPlugin = "LrInitPlugin.lua",
+    LrForceInitPlugin = true
 }
