@@ -1,3 +1,4 @@
+local LrApplication = import 'LrApplication'
 local LrDate = import 'LrDate'
 local LrProgressScope = import 'LrProgressScope'
 local LrDialogs = import 'LrDialogs'
@@ -14,7 +15,9 @@ local LrTasks = import 'LrTasks'
 local prefs = LrPrefs.prefsForPlugin()
 
 -- Process pictures and save them as JPEG
-local function processPhotos(folderPath, photos, exportSettings, progressScope)
+local function processPhotos(folderPath, photos, progressScope)
+    local exportSettings = prefs.exportSettings
+
     return LrFunctionContext.callWithContext("export", function(exportContext)
         progressScope:setCaption("Exporting… 0/" .. #photos)
 
@@ -82,8 +85,8 @@ local function processPhotos(folderPath, photos, exportSettings, progressScope)
 end
 
 -- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
-local function processLightroomFolders(LrCatalog, exportSettings)
-    if not exportSettings then
+local function processLightroomFolders()
+    if not prefs.exportSettings then
         LrDialogs.showBezel("Auto-export not set up", 2)
         return
     end
@@ -138,7 +141,7 @@ local function processLightroomFolders(LrCatalog, exportSettings)
 
                     if #export > 0 then
                         LrTasks.sleep(1)
-                        processPhotos(folder:getPath(), export, exportSettings, progressScope)
+                        processPhotos(folder:getPath(), export, progressScope)
                     end
 
                     local becameUnavailableDuringExport = not LrFileUtils.exists(folder:getPath())
@@ -190,6 +193,7 @@ local function processLightroomFolders(LrCatalog, exportSettings)
                 prefs.processedFolders = {}
             end
 
+            local LrCatalog = LrApplication.activeCatalog()
             local folders = LrCatalog:getFolders()
             local processedPhotos = {}
             for _, folder in pairs(folders) do
