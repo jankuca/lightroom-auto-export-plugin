@@ -14,7 +14,6 @@ local LrTasks = import 'LrTasks'
 
 local prefs = LrPrefs.prefsForPlugin()
 
--- Process pictures and save them as JPEG
 local function processPhotos(folderPath, photos, progressScope)
     local exportSettings = prefs.exportSettings
 
@@ -84,7 +83,6 @@ local function processPhotos(folderPath, photos, progressScope)
     end)
 end
 
--- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
 local function processLightroomFolders()
     if not prefs.exportSettings then
         LrDialogs.showBezel("Auto-export not set up", 2)

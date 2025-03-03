@@ -11,7 +11,6 @@ local LrTasks = import 'LrTasks'
 local ExportSettings = require 'ExportSettings'
 local Exporter = require 'Exporter'
 
--- GUI specification
 local function customPicker()
     LrFunctionContext.callWithContext("showCustomDialogWithObserver", function(context)
         local f = LrView.osFactory()
@@ -26,7 +25,6 @@ local function customPicker()
 
         local prefs = LrPrefs.prefsForPlugin()
 
-        -- copy values from prefs to props
         local props = LrBinding.makePropertyTable(context)
         props.exportSettings = prefs.exportSettings
         props.onlyExportPicked = prefs.onlyExportPicked or false
