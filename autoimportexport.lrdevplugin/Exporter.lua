@@ -1,3 +1,4 @@
+local LrDate = import 'LrDate'
 local LrProgressScope = import 'LrProgressScope'
 local LrDialogs = import 'LrDialogs'
 local LrFunctionContext = import 'LrFunctionContext'
@@ -17,30 +18,59 @@ local function processPhotos(folderPath, photos, exportSettings, progressScope)
     return LrFunctionContext.callWithContext("export", function(exportContext)
         progressScope:setCaption("Exporting… 0/" .. #photos)
 
-        local exportSession = LrExportSession({
-            photosToExport = photos,
-            exportSettings = exportSettings
-        })
+        local photosByDate = {}
+        local photoCounter = 0
 
-        local numPhotos = exportSession:countRenditions()
-
-        local renditionParams = {
-            progressScope = progressScope,
-            renderProgressPortion = 1,
-            stopIfCanceled = true
-        }
-
-        for i, rendition in exportSession:renditions(renditionParams) do
-            if progressScope:isCanceled() then
-                break
+        -- Group photos by capture date
+        for _, photo in ipairs(photos) do
+            local captureDate = photo:getRawMetadata("dateTime")
+            if captureDate then
+                local year, month, day, hour, minute, second = LrDate.timestampToComponents(captureDate)
+                local datePath = string.format("%04d/%04d-%02d/%04d-%02d-%02d", year, year, month, year, month, day)
+                if not photosByDate[datePath] then
+                    photosByDate[datePath] = {}
+                end
+                table.insert(photosByDate[datePath], photo)
             end
+        end
 
-            local fileName = rendition.photo:getFormattedMetadata("fileName")
-            local progressCaption = i .. "/" .. numPhotos .. " (" .. fileName .. ")"
-            progressScope:setCaption("Exporting… " .. progressCaption)
-            progressScope:setPortionComplete(i - 1, numPhotos)
+        -- Export each group of photos
+        for datePath, datePhotos in pairs(photosByDate) do
+            local exportPath = LrPathUtils.child(exportSettings['LR_export_destinationPathPrefix'], datePath)
+            LrFileUtils.createAllDirectories(exportPath)
 
-            rendition:waitForRender()
+            local dateExportSettings = {}
+            for k, v in pairs(exportSettings) do
+                dateExportSettings[k] = v
+            end
+            dateExportSettings['LR_export_destinationPathPrefix'] = exportPath
+
+            local exportSession = LrExportSession({
+                photosToExport = datePhotos,
+                exportSettings = dateExportSettings
+            })
+
+            local numPhotos = exportSession:countRenditions()
+
+            local renditionParams = {
+                progressScope = progressScope,
+                renderProgressPortion = 1,
+                stopIfCanceled = true
+            }
+
+            for i, rendition in exportSession:renditions(renditionParams) do
+                if progressScope:isCanceled() then
+                    break
+                end
+
+                photoCounter = photoCounter + 1
+                local fileName = rendition.photo:getFormattedMetadata("fileName")
+                local progressCaption = photoCounter .. "/" .. #photos .. " (" .. fileName .. ")"
+                progressScope:setCaption("Exporting… " .. progressCaption)
+                progressScope:setPortionComplete(photoCounter, #photos)
+
+                rendition:waitForRender()
+            end
         end
 
         if progressScope:isCanceled() then
