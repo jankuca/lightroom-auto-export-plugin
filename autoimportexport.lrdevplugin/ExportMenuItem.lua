@@ -58,6 +58,9 @@ local function customPicker()
 
         local numCharacters = 40
 
+        local prefs = LrPrefs.prefsForPlugin()
+        props.onlyExportPicked = prefs.onlyExportPicked or false
+
         local c = f:column{
             bind_to_object = props,
             spacing = f:dialog_spacing(),
@@ -131,22 +134,15 @@ local function customPicker()
                     end
                 })
             }},
-            f:row{f:column{
-                spacing = f:dialog_spacing(),
-                f:push_button{
-                    title = "Process flagged",
-
-                    action = function()
-                        Exporter.processLightroomFolders(LrCatalog, false, props.exportSettings)
-                    end
-                },
-                f:push_button{
-                    title = "Process all",
-
-                    action = function()
-                        Exporter.processLightroomFolders(LrCatalog, true, props.exportSettings)
-                    end
-                }
+            f:row{f:checkbox{
+                title = "Only process picked items",
+                value = LrView.bind("onlyExportPicked"),
+                checked_value = true,
+                unchecked_value = false,
+                action = function(checked)
+                    props.onlyExportPicked = checked
+                    prefs.onlyExportPicked = checked
+                end
             }},
 
             f:row{
@@ -159,7 +155,6 @@ local function customPicker()
             f:push_button{
                 title = "Clear processed folders",
                 action = function()
-                    local prefs = LrPrefs.prefsForPlugin()
                     prefs.processedFolders = {}
                     LrDialogs.showBezel("List of processed folders cleared", 2)
                 end

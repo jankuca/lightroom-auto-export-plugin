@@ -82,7 +82,7 @@ local function processPhotos(folderPath, photos, exportSettings, progressScope)
 end
 
 -- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
-local function processLightroomFolders(LrCatalog, processAll, exportSettings)
+local function processLightroomFolders(LrCatalog, exportSettings)
     LrTasks.startAsyncTask(function()
         LrFunctionContext.callWithContext("listFoldersAndFiles", function(context)
             local function processFolder(folder, processedPhotos)
@@ -115,7 +115,7 @@ local function processLightroomFolders(LrCatalog, processAll, exportSettings)
 
                     for photoIndex, photo in pairs(photos) do
                         if not processedPhotos[photo.localIdentifier] then
-                            if (processAll or photo:getRawMetadata("pickStatus") == 1) and
+                            if (not prefs.onlyProcessPicked or photo:getRawMetadata("pickStatus") == 1) and
                                 photo:getRawMetadata("pickStatus") ~= -1 then
                                 table.insert(export, photo)
                                 processedPhotos[photo.localIdentifier] = true
