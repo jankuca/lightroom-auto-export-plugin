@@ -1,16 +1,14 @@
--- Access the Lightroom SDK namespaces.
+local LrApplication = import 'LrApplication'
 local LrDialogs = import 'LrDialogs'
 local LrFunctionContext = import 'LrFunctionContext'
 local LrBinding = import 'LrBinding'
 local LrView = import 'LrView'
 local LrPathUtils = import 'LrPathUtils'
-local LrPrefs = import 'LrPrefs'
 
-local LrApplication = import 'LrApplication'
-local LrExportSession = import 'LrExportSession'
 local LrTasks = import 'LrTasks'
 
 local ExportSettings = require 'ExportSettings'
+local Exporter = require 'Exporter'
 
 -- Load saved export settings on plugin initialization
 local function loadPropsForContext(context)
@@ -43,102 +41,6 @@ local function loadPropsForContext(context)
     end
 
     return props
-end
-
--- Process pictures and save them as JPEG
-local function processPhotos(photos, exportSettings)
-    LrFunctionContext.callWithContext("export", function(exportContext)
-
-        local progressScope = LrDialogs.showModalProgressDialog({
-            title = "Auto applying presets",
-            caption = "",
-            cannotCancel = false,
-            functionContext = exportContext
-        })
-
-        local exportSession = LrExportSession({
-            photosToExport = photos,
-            exportSettings = exportSettings
-        })
-
-        local numPhotos = exportSession:countRenditions()
-
-        local renditionParams = {
-            progressScope = progressScope,
-            renderProgressPortion = 1,
-            stopIfCanceled = true
-        }
-
-        for i, rendition in exportSession:renditions(renditionParams) do
-
-            -- Stop processing if the cancel button has been pressed
-            if progressScope:isCanceled() then
-                break
-            end
-
-            -- Common caption for progress bar
-            local progressCaption = rendition.photo:getFormattedMetadata("fileName") .. " (" .. i .. "/" .. numPhotos ..
-                                        ")"
-
-            progressScope:setPortionComplete(i - 1, numPhotos)
-            progressScope:setCaption("Processing " .. progressCaption)
-
-            rendition:waitForRender()
-        end
-    end)
-end
-
--- Import pictures from folder where the rating is not 3 stars and the photo is flagged.
-local function processLightroomFolders(LrCatalog, processAll, exportSettings)
-    LrTasks.startAsyncTask(function()
-        local folders = {}
-        for _, folder in pairs(LrCatalog:getFolders()) do
-                table.insert(folders, folder)
-        end
-
-        local export = {}
-
-        for _, folder in pairs(folders) do
-            local photos = folder:getPhotos()
-
-            for _, photo in pairs(photos) do
-                local keywords = photo:getRawMetadata("keywords")
-                local skipPhoto = false
-                for _, keyword in pairs(keywords) do
-                    if keyword:getName() == "Auto-exported" then
-                        skipPhoto = true
-                        break
-                    end
-                end
-
-                if not skipPhoto and (processAll or photo:getRawMetadata("pickStatus") == 1) then
-                    LrCatalog:withWriteAccessDo("Add Keyword", (function(context)
-                        local keywords = LrCatalog:getKeywords()
-                        local autoExportedKeyword = nil
-                        for _, keyword in pairs(keywords) do
-                            if keyword:getName() == "Auto-exported" then
-                                autoExportedKeyword = keyword
-                                break
-                            end
-                        end
-                        if not autoExportedKeyword then
-                            autoExportedKeyword = LrCatalog:createKeyword("Auto-exported", {}, false, nil, true)
-                        end
-                        photo:addKeyword(autoExportedKeyword)
-                        table.insert(export, photo)
-                    end), {
-                        timeout = 30
-                    })
-                end
-            end
-        end
-
-        LrTasks.sleep(1)
-
-        if #export > 0 then
-            processPhotos(export, exportSettings)
-        end
-    end)
 end
 
 -- GUI specification
@@ -176,7 +78,7 @@ local function customPicker()
                     while watcherRunning do
                         props.watcherStatus = "Running - # runs: " .. index
                         LrDialogs.showBezel("Processing images.", 0.4)
-                        processLightroomFolders(LrCatalog, processAll, props.exportSettings)
+                        Exporter.processLightroomFolders(LrCatalog, processAll, props.exportSettings)
 
                         if LrTasks.canYield() then
                             LrTasks.yield()
@@ -278,7 +180,7 @@ local function customPicker()
 
                         action = function()
                             props.watcherStatus = "Working"
-                            processLightroomFolders(LrCatalog, false, props.exportSettings)
+                            Exporter.processLightroomFolders(LrCatalog, false, props.exportSettings)
                             props.watcherStatus = "Processed once"
                         end
                     },
@@ -287,7 +189,7 @@ local function customPicker()
 
                         action = function()
                             props.watcherStatus = "Working"
-                            processLightroomFolders(LrCatalog, true, props.exportSettings)
+                            Exporter.processLightroomFolders(LrCatalog, true, props.exportSettings)
                             props.watcherStatus = "Processed once"
                         end
                     }
