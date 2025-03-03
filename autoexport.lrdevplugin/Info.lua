@@ -15,6 +15,9 @@ return {
     LrExportMenuItems = {{
         title = "Auto-export settings",
         file = "AutoExportSettingsMenuItem.lua"
+    }, {
+        title = "Run auto-export",
+        file = "RunAutoExportMenuItem.lua"
     }},
 
     LrMetadataProvider = "LrMetadataProvider.lua",
